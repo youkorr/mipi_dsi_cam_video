@@ -2,6 +2,7 @@
 
 #include "esphome/core/component.h"
 #include "esphome/core/hal.h"
+#include "esphome/components/i2c/i2c.h"
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
@@ -56,12 +57,18 @@ public:
   float get_setup_priority() const override { return setup_priority::DATA; }
   
   // === Configuration ===
+  void set_name(const std::string &name) { name_ = name; }
   void set_sensor_name(const std::string &name) { sensor_name_ = name; }
   void set_resolution(uint16_t width, uint16_t height);
   void set_resolution_preset(const std::string &preset);
   void set_pixel_format(PixelFormat format) { pixel_format_ = format; }
   void set_framerate(uint8_t fps) { framerate_ = fps; }
   void set_jpeg_quality(uint8_t quality) { jpeg_quality_ = quality; }
+  
+  // I2C et horloge externe
+  void set_i2c_parent(i2c::I2CComponent *parent) { i2c_parent_ = parent; }
+  void set_external_clock_pin(GPIOPin *pin) { external_clock_pin_ = pin; }
+  void set_external_clock_frequency(uint32_t freq) { external_clock_freq_ = freq; }
   
   // === Streaming ===
   bool start_streaming();
@@ -111,12 +118,18 @@ public:
 
 protected:
   // Configuration
+  std::string name_{"MIPI Camera"};
   std::string sensor_name_{"sc202cs"};
   uint16_t width_{1280};
   uint16_t height_{720};
   PixelFormat pixel_format_{PixelFormat::RGB565};
   uint8_t framerate_{30};
   uint8_t jpeg_quality_{80};
+  
+  // I2C et horloge externe
+  i2c::I2CComponent *i2c_parent_{nullptr};
+  GPIOPin *external_clock_pin_{nullptr};
+  uint32_t external_clock_freq_{24000000};  // 24 MHz par défaut
   
   // H.264
   bool h264_enabled_{false};
