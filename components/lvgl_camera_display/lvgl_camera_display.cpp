@@ -16,12 +16,21 @@ void LVGLCameraDisplay::setup() {
     return;
   }
 
-  // Intervalle pour 30 FPS
-  this->update_interval_ = 33;  // ms
+  // S'assurer que le streaming est démarré
+  if (!this->camera_->is_streaming()) {
+    ESP_LOGI(TAG, "Démarrage du streaming caméra...");
+    if (!this->camera_->start_streaming()) {
+      ESP_LOGE(TAG, "❌ Échec démarrage streaming");
+      this->mark_failed();
+      return;
+    }
+  }
 
   ESP_LOGI(TAG, "✅ LVGL Camera Display initialisé");
   ESP_LOGI(TAG, "   Update interval: %u ms (~%d FPS)", 
            this->update_interval_, 1000 / this->update_interval_);
+  ESP_LOGI(TAG, "   Résolution caméra: %ux%u", 
+           this->camera_->get_width(), this->camera_->get_height());
 }
 
 void LVGLCameraDisplay::loop() {
@@ -36,6 +45,7 @@ void LVGLCameraDisplay::loop() {
 
   // Si la caméra est en streaming, capturer ET mettre à jour le canvas
   if (this->camera_->is_streaming()) {
+    // Capturer une nouvelle frame
     bool frame_captured = this->camera_->capture_frame();
 
     if (frame_captured) {
@@ -63,6 +73,15 @@ void LVGLCameraDisplay::dump_config() {
   ESP_LOGCONFIG(TAG, "  Update interval: %u ms", this->update_interval_);
   ESP_LOGCONFIG(TAG, "  FPS cible: ~%d", 1000 / this->update_interval_);
   ESP_LOGCONFIG(TAG, "  Canvas configuré: %s", this->canvas_obj_ ? "OUI" : "NON");
+  
+  if (this->camera_) {
+    ESP_LOGCONFIG(TAG, "  Caméra:");
+    ESP_LOGCONFIG(TAG, "    Résolution: %ux%u", 
+                  this->camera_->get_width(), 
+                  this->camera_->get_height());
+    ESP_LOGCONFIG(TAG, "    Streaming: %s", 
+                  this->camera_->is_streaming() ? "OUI" : "NON");
+  }
 }
 
 void LVGLCameraDisplay::update_canvas_() {
@@ -78,23 +97,27 @@ void LVGLCameraDisplay::update_canvas_() {
     return;
   }
 
-  uint8_t* img_data = this->camera_->get_image_data();
-  uint16_t width = this->camera_->get_image_width();
-  uint16_t height = this->camera_->get_image_height();
+  // Récupérer les données de la frame depuis mipi_dsi_cam_video
+  uint8_t* img_data = this->camera_->get_frame_data();
+  size_t img_size = this->camera_->get_frame_size();
+  uint16_t width = this->camera_->get_width();
+  uint16_t height = this->camera_->get_height();
 
-  if (img_data == nullptr) {
+  if (img_data == nullptr || img_size == 0) {
     return;
   }
 
   if (this->first_update_) {
     ESP_LOGI(TAG, "🖼️  Premier update canvas:");
     ESP_LOGI(TAG, "   Dimensions: %ux%u", width, height);
+    ESP_LOGI(TAG, "   Taille buffer: %u bytes", img_size);
     ESP_LOGI(TAG, "   Buffer: %p", img_data);
     ESP_LOGI(TAG, "   Premiers pixels (RGB565): %02X%02X %02X%02X %02X%02X", 
              img_data[0], img_data[1], img_data[2], img_data[3], img_data[4], img_data[5]);
     this->first_update_ = false;
   }
 
+  // Mettre à jour le canvas LVGL avec les données RGB565
   lv_canvas_set_buffer(this->canvas_obj_, img_data, width, height, LV_IMG_CF_TRUE_COLOR);
   lv_obj_invalidate(this->canvas_obj_);
 }
