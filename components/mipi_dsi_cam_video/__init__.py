@@ -10,7 +10,7 @@ from esphome.const import (
 
 DEPENDENCIES = ["i2c"]
 AUTO_LOAD = []
-CODEOWNERS = ["@your_github"]
+CODEOWNERS = ["@youkorr"]
 
 mipi_dsi_cam_video_ns = cg.esphome_ns.namespace("mipi_dsi_cam_video")
 MipiDsiCamVideo = mipi_dsi_cam_video_ns.class_("MipiDsiCamVideo", cg.Component, i2c.I2CDevice)
