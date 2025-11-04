@@ -1,17 +1,19 @@
 """ESPHome component for MIPI CSI Camera using esp-video framework."""
 import esphome.codegen as cg
 import esphome.config_validation as cv
+from esphome.components import i2c
+from esphome import pins
 from esphome.const import (
     CONF_ID,
     CONF_NAME,
 )
 
-DEPENDENCIES = []
+DEPENDENCIES = ["i2c"]
 AUTO_LOAD = []
 CODEOWNERS = ["@your_github"]
 
 mipi_dsi_cam_video_ns = cg.esphome_ns.namespace("mipi_dsi_cam_video")
-MipiDsiCamVideo = mipi_dsi_cam_video_ns.class_("MipiDsiCamVideo", cg.Component)
+MipiDsiCamVideo = mipi_dsi_cam_video_ns.class_("MipiDsiCamVideo", cg.Component, i2c.I2CDevice)
 
 # Pixel formats
 PixelFormat = mipi_dsi_cam_video_ns.enum("PixelFormat")
@@ -30,6 +32,8 @@ CONF_RESOLUTION = "resolution"
 CONF_PIXEL_FORMAT = "pixel_format"
 CONF_FRAMERATE = "framerate"
 CONF_JPEG_QUALITY = "jpeg_quality"
+CONF_EXTERNAL_CLOCK = "external_clock"
+CONF_FREQUENCY = "frequency"
 
 # H.264 configuration
 CONF_H264 = "h264"
@@ -86,6 +90,13 @@ H264_SCHEMA = cv.Schema({
     cv.Optional(CONF_H264_QP_MAX, default=40): cv.int_range(min=0, max=51),
 })
 
+EXTERNAL_CLOCK_SCHEMA = cv.Schema({
+    cv.Required(pins.GPIO_FULL_OUTPUT_PIN_SCHEMA): pins.GPIO_FULL_OUTPUT_PIN_SCHEMA,
+    cv.Optional(CONF_FREQUENCY, default="24MHz"): cv.All(
+        cv.frequency, cv.int_range(min=1000000, max=40000000)
+    ),
+})
+
 WHITE_BALANCE_SCHEMA = cv.Schema({
     cv.Optional(CONF_AUTO_WHITE_BALANCE, default=True): cv.boolean,
     cv.Optional(CONF_WHITE_BALANCE_TEMP, default=5000): cv.int_range(min=2000, max=10000),
@@ -113,17 +124,27 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(CONF_PIXEL_FORMAT, default="RGB565"): cv.enum(PIXEL_FORMATS, upper=True),
     cv.Optional(CONF_FRAMERATE, default=30): cv.int_range(min=1, max=60),
     cv.Optional(CONF_JPEG_QUALITY, default=80): cv.int_range(min=1, max=100),
+    cv.Optional(CONF_EXTERNAL_CLOCK): EXTERNAL_CLOCK_SCHEMA,
     cv.Optional(CONF_H264): H264_SCHEMA,
     cv.Optional(CONF_CONTROLS): CONTROLS_SCHEMA,
-}).extend(cv.COMPONENT_SCHEMA)
+}).extend(cv.COMPONENT_SCHEMA).extend(i2c.i2c_device_schema(0x36))
 
 async def to_code(config):
     """Générer le code C++ pour le composant."""
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
+    await i2c.register_i2c_device(var, config)
     
     # Configuration de base
+    cg.add(var.set_name(config[CONF_NAME]))
     cg.add(var.set_sensor_name(config[CONF_SENSOR_NAME]))
+    
+    # External clock (horloge MCLK pour le capteur)
+    if CONF_EXTERNAL_CLOCK in config:
+        clock_conf = config[CONF_EXTERNAL_CLOCK]
+        pin = await cg.gpio_pin_expression(clock_conf[pins.GPIO_FULL_OUTPUT_PIN_SCHEMA])
+        cg.add(var.set_external_clock_pin(pin))
+        cg.add(var.set_external_clock_frequency(clock_conf[CONF_FREQUENCY]))
     
     # Résolution
     resolution = config[CONF_RESOLUTION]
