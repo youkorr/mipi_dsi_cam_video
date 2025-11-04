@@ -34,6 +34,7 @@ CONF_FRAMERATE = "framerate"
 CONF_JPEG_QUALITY = "jpeg_quality"
 CONF_EXTERNAL_CLOCK = "external_clock"
 CONF_FREQUENCY = "frequency"
+CONF_PIN = "pin"
 
 # H.264 configuration
 CONF_H264 = "h264"
@@ -91,7 +92,7 @@ H264_SCHEMA = cv.Schema({
 })
 
 EXTERNAL_CLOCK_SCHEMA = cv.Schema({
-    cv.Required(pins.GPIO_FULL_OUTPUT_PIN_SCHEMA): pins.GPIO_FULL_OUTPUT_PIN_SCHEMA,
+    cv.Required(CONF_PIN): pins.gpio_output_pin_schema,
     cv.Optional(CONF_FREQUENCY, default="24MHz"): cv.All(
         cv.frequency, cv.int_range(min=1000000, max=40000000)
     ),
@@ -142,7 +143,7 @@ async def to_code(config):
     # External clock (horloge MCLK pour le capteur)
     if CONF_EXTERNAL_CLOCK in config:
         clock_conf = config[CONF_EXTERNAL_CLOCK]
-        pin = await cg.gpio_pin_expression(clock_conf[pins.GPIO_FULL_OUTPUT_PIN_SCHEMA])
+        pin = await cg.gpio_pin_expression(clock_conf[CONF_PIN])
         cg.add(var.set_external_clock_pin(pin))
         cg.add(var.set_external_clock_frequency(clock_conf[CONF_FREQUENCY]))
     
@@ -177,7 +178,6 @@ async def to_code(config):
     if CONF_CONTROLS in config:
         controls = config[CONF_CONTROLS]
         
-        # Attendre la fin du setup pour appliquer les contrôles
         cg.add(var.set_brightness(controls[CONF_BRIGHTNESS]))
         cg.add(var.set_contrast(controls[CONF_CONTRAST]))
         cg.add(var.set_saturation(controls[CONF_SATURATION]))
@@ -209,3 +209,4 @@ async def to_code(config):
     cg.add_library("esp_h264", None)
     cg.add_library("esp_ipa", None)
     cg.add_library("esp_sccb_intf", None)
+
